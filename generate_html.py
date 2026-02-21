@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 读取数据
 with open('data.json', 'r', encoding='utf-8') as f:
@@ -26,7 +26,7 @@ html = f"""<!DOCTYPE html>
         .markets-title {{ font-weight: 600; margin: 20px 0 10px; color: #1e293b; }}
         .market {{ background: #f1f5f9; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 0 8px 8px 0; margin-bottom: 15px; }}
         .market-question {{ font-weight: 500; color: #0f172a; margin-bottom: 10px; }}
-        .outcomes {{ display: flex; gap: 15px; margin: 10px 0; }}
+        .outcomes {{ display: flex; gap: 15px; margin: 10px 0; flex-wrap: wrap; }}
         .outcome {{ padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; font-weight: 500; }}
         .outcome.Yes {{ background: #dbeafe; color: #1e40af; }}
         .outcome.No {{ background: #fee2e2; color: #991b1b; }}
@@ -38,7 +38,7 @@ html = f"""<!DOCTYPE html>
 <body>
     <div class="container">
         <h1>📊 Polymarket 活跃事件</h1>
-        <div class="update-time">更新于：{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</div>
+        <div class="update-time">更新于：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</div>
 """
 
 for event in events:
@@ -49,6 +49,17 @@ for event in events:
     liquidity = event.get('liquidity', 0)
     volume_24h = event.get('volume24hr', 0)
     description = event.get('description', '')[:200] + ('...' if len(event.get('description', '')) > 200 else '')
+
+    # 确保数字格式正确
+    try:
+        liquidity = float(liquidity) if liquidity else 0
+    except (ValueError, TypeError):
+        liquidity = 0
+        
+    try:
+        volume_24h = float(volume_24h) if volume_24h else 0
+    except (ValueError, TypeError):
+        volume_24h = 0
 
     html += f"""
         <div class="event">
@@ -69,18 +80,43 @@ for event in events:
         for market in markets:
             question = market.get('question', '未知问题')
             volume = market.get('volume', 0)
+            
+            # 确保交易量是数字
+            try:
+                volume = float(volume) if volume else 0
+            except (ValueError, TypeError):
+                volume = 0
+            
             outcome_prices = market.get('outcomePrices', '[]')
             outcomes = market.get('outcomes', '["Yes","No"]')
+            
             try:
-                prices = json.loads(outcome_prices)
-                outcomes_list = json.loads(outcomes)
+                # 解析 JSON 字符串
+                if isinstance(outcome_prices, str):
+                    prices = json.loads(outcome_prices)
+                else:
+                    prices = outcome_prices
+                    
+                if isinstance(outcomes, str):
+                    outcomes_list = json.loads(outcomes)
+                else:
+                    outcomes_list = outcomes
             except:
                 prices = [0, 0]
                 outcomes_list = ['Yes', 'No']
 
             outcomes_html = ''
             for i, outcome in enumerate(outcomes_list):
-                prob = prices[i] * 100 if i < len(prices) else 0
+                if i < len(prices):
+                    try:
+                        # 确保价格是数字
+                        price = float(prices[i])
+                        prob = price * 100
+                    except (ValueError, TypeError):
+                        prob = 0
+                else:
+                    prob = 0
+                    
                 outcomes_html += f'<span class="outcome {outcome}">{outcome}: {prob:.1f}%</span>'
 
             html += f"""
